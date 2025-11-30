@@ -1,0 +1,121 @@
+import os
+import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+import pyttsx3
+
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# BOT_TOKEN environment variable se lenge
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+class TelegramTTSBot:
+    def __init__(self):
+        self.engine = pyttsx3.init()
+        self.engine.setProperty('rate', 150)  # Speech speed
+    
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        welcome_text = f"""
+🎤 Namaste {user.first_name}!
+
+🤖 **Text-to-Speech Telegram Bot**
+
+📝 **Available Commands:**
+/start - Bot ko start karein
+/tts [text] - Text ko audio me convert karein
+/speed [number] - Voice speed set karein (50-300)
+/help - Saari commands dekhein
+
+🔄 **Example:**
+/tts Hello, kaise ho aap?
+/speed 120
+"""
+        await update.message.reply_text(welcome_text)
+    
+    async def tts_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not context.args:
+            await update.message.reply_text("❌ Usage: /tts Your text here")
+            return
+        
+        text = ' '.join(context.args)
+        
+        try:
+            # Temporary audio file banayein
+            filename = f"audio_{update.message.message_id}.mp3"
+            
+            # Text-to-speech conversion
+            self.engine.save_to_file(text, filename)
+            self.engine.runAndWait()
+            
+            # Audio file send karein
+            await update.message.reply_voice(
+                voice=open(filename, 'rb'),
+                caption=f'🔊: {text}'
+            )
+            
+            # Temporary file delete karein
+            os.remove(filename)
+            
+        except Exception as e:
+            error_msg = f"❌ Error: {str(e)}"
+            await update.message.reply_text(error_msg)
+    
+    async def speed_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if context.args and context.args[0].isdigit():
+            speed = int(context.args[0])
+            if 50 <= speed <= 300:
+                self.engine.setProperty('rate', speed)
+                await update.message.reply_text(f"✅ Voice speed set to: {speed}")
+            else:
+                await update.message.reply_text("❌ Speed should be between 50-300")
+        else:
+            await update.message.reply_text("❌ Usage: /speed 150")
+    
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        help_text = """
+🎤 **Text-to-Speech Bot - Help Guide**
+
+📋 **Commands:**
+/start - Bot ko start karein
+/tts [text] - Text ko audio me convert karein
+/speed [number] - Voice speed change karein
+/help - Ye help message dekhein
+
+🚀 **Examples:**
+/tts Hello, main Telegram bot hun
+/speed 130
+/tts Aapka din shubh ho
+
+🔧 **Note:** Bot 24/7 running rahega!
+"""
+        await update.message.reply_text(help_text)
+
+def main():
+    # Check if BOT_TOKEN set hai
+    if not BOT_TOKEN:
+        logging.error("❌ BOT_TOKEN environment variable set nahi hai!")
+        return
+    
+    # Bot initialize karein
+    bot = TelegramTTSBot()
+    
+    # Application banayein
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Command handlers add karein
+    application.add_handler(CommandHandler("start", bot.start))
+    application.add_handler(CommandHandler("tts", bot.tts_command))
+    application.add_handler(CommandHandler("speed", bot.speed_command))
+    application.add_handler(CommandHandler("help", bot.help_command))
+    
+    # Bot start karein
+    logging.info("🤖 Telegram TTS Bot Starting...")
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
